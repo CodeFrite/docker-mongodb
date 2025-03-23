@@ -101,4 +101,60 @@ local   40.00 KiB
 ```
 
 Most of the information in this section can be found [in this guide on mongodb website](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-community-with-docker/).
-# docker-mongodb
+
+# Step 5: Creating a new Database, inserting and querying data
+
+Before going any further and learn how to connect to the MongoDB container from different programming languages, let's create a new database, a new collection, insert some data and query it.
+
+First, let's create a new database called `dictionary` which will contain a collection called `wordDefs` of words and their definitions in a given language. Run the following commands in the `mongosh` shell:
+
+```bash
+test> use dictionary
+```
+
+This first command switches to the `dictionary` database. At this point, the database is not yet created, but it will be created as soon as you insert data into it.
+
+Now, let's insert some data into the `wordDefs` collection:
+
+```bash
+dictionary> db.dictionary.insertOne({ word: "hello", definition: "used as a greeting or to begin a conversation" })
+{
+  acknowledged: true,
+  insertedId: ObjectId('67dff28a26255525725c8c01')
+}
+
+dictionary> db.dictionary.insertOne({ word: "world", definition: "the earth, together with all of its countries and peoples" })
+{
+  acknowledged: true,
+  insertedId: ObjectId('67dff2a126255525725c8c02')
+}
+```
+
+Now we can query all the data we just inserted:
+
+```bash
+dictionary> db.dictionary.find().toArray()
+[
+  {
+    _id: ObjectId('67dff28a26255525725c8c01'),
+    word: 'hello',
+    definition: 'used as a greeting or to begin a conversation'
+  },
+  {
+    _id: ObjectId('67dff2a126255525725c8c02'),
+    word: 'world',
+    definition: 'the earth, together with all of its countries and peoples'
+  }
+]
+```
+
+We can also query a specific word:
+
+```bash
+dictionary> db.dictionary.findOne({ word: "hello" })
+{
+  _id: ObjectId('67dff28a26255525725c8c01'),
+  word: 'hello',
+  definition: 'used as a greeting or to begin a conversation'
+}
+```
