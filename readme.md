@@ -117,13 +117,13 @@ This first command switches to the `dictionary` database. At this point, the dat
 Now, let's insert some data into the `wordDefs` collection:
 
 ```bash
-dictionary> db.dictionary.insertOne({ word: "hello", definition: "used as a greeting or to begin a conversation" })
+dictionary> db.wordDefs.insertOne({ word: "hello", definition: "used as a greeting or to begin a conversation" })
 {
   acknowledged: true,
   insertedId: ObjectId('67dff28a26255525725c8c01')
 }
 
-dictionary> db.dictionary.insertOne({ word: "world", definition: "the earth, together with all of its countries and peoples" })
+dictionary> db.wordDefs.insertOne({ word: "world", definition: "the earth, together with all of its countries and peoples" })
 {
   acknowledged: true,
   insertedId: ObjectId('67dff2a126255525725c8c02')
@@ -133,7 +133,7 @@ dictionary> db.dictionary.insertOne({ word: "world", definition: "the earth, tog
 Now we can query all the data we just inserted:
 
 ```bash
-dictionary> db.dictionary.find().toArray()
+dictionary> db.wordDefs.find().toArray()
 [
   {
     _id: ObjectId('67dff28a26255525725c8c01'),
@@ -151,10 +151,218 @@ dictionary> db.dictionary.find().toArray()
 We can also query a specific word:
 
 ```bash
-dictionary> db.dictionary.findOne({ word: "hello" })
+dictionary> db.wordDefs.findOne({ word: "hello" })
 {
   _id: ObjectId('67dff28a26255525725c8c01'),
   word: 'hello',
   definition: 'used as a greeting or to begin a conversation'
 }
 ```
+
+# Step 6: Connecting to MongoDB from Next.js
+
+In this section, we will learn how to connect to the MongoDB container from a Next.js application and how to perform basic operations such as inserting and querying data from a collection.
+
+## Step 6.1: Creating a new Next.js Project
+
+First, we need to initialize a new Next.js application. Run the following command in your terminal:
+
+```bash
+% npx create-next-app docker-mongodb-nextjs
+
+✔ Would you like to use TypeScript? … No / <Yes>
+✔ Would you like to use ESLint? … No / <Yes>
+✔ Would you like to use Tailwind CSS? … <No> / Yes
+✔ Would you like your code inside a `src/` directory? … <No> / Yes
+✔ Would you like to use App Router? (recommended) … No / <Yes>
+✔ Would you like to use Turbopack for `next dev`? … <No> / Yes
+✔ Would you like to customize the import alias (`@/*` by default)? … <No> / Yes
+Creating a new Next.js app in /docker/mongodb/docker-mongodb-nextjs.
+
+Using npm.
+
+Initializing project with template: app
+
+
+Installing dependencies:
+- react
+- react-dom
+- next
+
+Installing devDependencies:
+- typescript
+- @types/node
+- @types/react
+- @types/react-dom
+- eslint
+- eslint-config-next
+- @eslint/eslintrc
+
+added 303 packages, and audited 304 packages in 16s
+
+127 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+Success! Created docker-mongodb-nextjs at /docker/mongodb/docker-mongodb-nextjs
+```
+
+Now, navigate to the newly created directory and run the following command to start the Next.js application to make sure everything is working:
+
+```bash
+% cd docker-mongodb-nextjs
+% npm run dev
+
+> docker-mongodb-nextjs@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.2.3
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.29:3000
+
+ ✓ Starting...
+ ✓ Ready in 1242ms
+```
+
+You should be able to access it at [http://localhost:3000](http://localhost:3000).
+
+## Step 6.2: Installing MongoDB dependency
+
+Now that our MongoDB container and our Next.js app are running, we want to connect to the database. First, we need to install the `mongodb` package. This will allow us to instantiate a new MongoDB client, connect to the database, and perform CRUD operations.
+
+```bash
+% npm install mongodb
+
+added 11 packages, and audited 315 packages in 2s
+
+127 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+```
+
+## Step 6.3: Instantiating a new MongoDB client
+
+To interact with the MongoDB container, we need to instantiate a new MongoDB client. Create a new file `mongodb-client.ts` in the new folder `lib` and add the following code:
+
+```typescript
+import { MongoClient } from "mongodb";
+
+const uri = process.env.MONGODB_URI as string;
+const options = {};
+
+let client: MongoClient;
+let clientPromise: Promise<MongoClient>;
+
+declare global {
+  var _mongoClientPromise: Promise<MongoClient>;
+}
+
+if (!global._mongoClientPromise) {
+  client = new MongoClient(uri, options);
+  global._mongoClientPromise = client.connect();
+}
+
+clientPromise = global._mongoClientPromise;
+export default clientPromise;
+```
+
+As you can see, this code:
+
+- loads the mongoDB credentials from the environment variables
+- creates a new MongoDB client if it doesn't exist
+- saves it in the global scope
+- connects to the MongoDB container
+- returns a promise that resolves to the MongoDB client
+
+For it to work, you need to set the `MONGODB_URI` environment variable. You can do this by creating a new file called `.env.local` in the root of the project and adding the following line:
+
+```
+MONGODB_URI=mongodb://localhost:27017
+```
+
+## Step 6.4: Creating a new API route to query all the documents from a collection
+
+In order to interact with the MongoDB container, we need to create a new API route. Create a new api file `route.ts` under `app/api/getAll` that will allow us to query all the documents from our `wordDefs` collection inside the `dictionary` database:
+
+```typescript
+import { NextResponse } from "next/server";
+import clientPromise from "@/lib/mongodb-client";
+
+export async function GET() {
+  try {
+    const client = await clientPromise;
+    const db = client.db("dictionary");
+    const data = await db.collection("wordDefs").find({}).toArray();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error fetching data:", error); // Log the error for debugging
+    return NextResponse.json({ error: "Error fetching data" }, { status: 500 });
+  }
+}
+```
+
+## Step 6.5: Using the API route in a component
+
+To use the API route we just created, we will be creating a new component that will simply call the API `getAll` and display the data in a list.
+
+Create a folder `app/components` and add a `DataList.tsx` file with the following code:
+
+```tsx
+"use client";
+import { useEffect, useState } from "react";
+
+type Data = {
+  _id: string;
+  word: string;
+  definition: string;
+};
+
+export default function DataList() {
+  const [data, setData] = useState<Data[]>([]);
+
+  useEffect(() => {
+    fetch("/api/getAll")
+      .then((res) => res.json())
+      .then((data) => setData(data));
+  }, []);
+
+  return (
+    <div>
+      <h1>MongoDB Data</h1>
+      <ul>
+        {data.map((item) => (
+          <li key={item._id}>
+            {item.word}:{item.definition}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+## Step 6.6: Using our component in the home page
+
+To test our component, we will be using it in the home page. Open the `pages/index.tsx` file and add the following code:
+
+```tsx
+import Image from "next/image";
+import styles from "./page.module.css";
+import DataList from "./components/DataList";
+
+export default function Home() {
+  return (
+    <div className={styles.page}>
+      <main>
+        <h1>List of words from dictionary.wordDefs</h1>
+        <DataList />
+      </main>
+    </div>
+  );
+}
+```
+
+You should see the following result:
+
+![List of Words from MongoDB inside Next.js app](./images/list-of-words.png)
